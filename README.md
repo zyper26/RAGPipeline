@@ -21,6 +21,7 @@ Query
 | `hybrid_retriever.py` | `HybridRetriever` | Fuses BM25 + dense rankings via Reciprocal Rank Fusion |
 | `cross_encoder_rerank.py` | `CrossEncoderReranker` | Re-scores top candidates with a cross-encoder model |
 | `RAGPipeline.py` | `RAGPipeline` | End-to-end pipeline: retrieve → rerank → build prompt |
+| `evaluation.py` | `evaluate_rag()`, `evaluate_retrieval()`, `evaluate_generation()` | Retrieval + generation metrics (Precision@K, Recall@K, MRR, Hit Rate@K, NDCG@K, Faithfulness, Answer Relevancy) |
 
 ## How It Works
 
@@ -93,7 +94,59 @@ python cross_encoder_rerank.py
 
 # Run the full pipeline
 python RAGPipeline.py
+
+# Run evaluation smoke test
+python evaluation.py
 ```
+
+## Evaluation
+
+`evaluation.py` provides a two-layer evaluation suite.
+
+### Retrieval Metrics
+
+| Metric | Function | Description |
+|---|---|---|
+| Precision@K | `precision_at_k()` | Fraction of top-K retrieved docs that are relevant |
+| Recall@K | `recall_at_k()` | Fraction of relevant docs found in top-K |
+| Hit Rate@K | `hit_rate_at_k()` | 1.0 if any relevant doc appears in top-K |
+| NDCG@K | `ndcg_at_k()` | Normalized Discounted Cumulative Gain — rewards higher-ranked hits |
+| MRR | `mrr()` | Mean Reciprocal Rank — position of first relevant doc |
+
+### Generation Metrics (LLM-as-judge)
+
+| Metric | Function | Description |
+|---|---|---|
+| Faithfulness | `faithfulness_score()` | Fraction of answer claims supported by retrieved context |
+| Answer Relevancy | `answer_relevancy_score()` | LLM-rated 0–10 score of how well the answer addresses the question |
+
+### Usage
+
+```python
+from evaluation import evaluate_rag
+
+def my_llm(prompt: str) -> str:
+    ...  # call your LLM here
+
+results = evaluate_rag(
+    question  = "how does attention mechanism work",
+    answer    = "Attention uses Q K V projections scaled by sqrt(d_k).",
+    retrieved = ["doc_A", "doc_B", "doc_C"],
+    relevant  = ["doc_A", "doc_C"],
+    llm_fn    = my_llm,
+    k         = 5,
+)
+# {'precision@5': 0.4, 'recall@5': 0.6667, 'hit_rate@5': 1.0,
+#  'ndcg@5': 0.8154, 'mrr': 1.0, 'faithfulness': 0.8, 'answer_relevancy': 0.8}
+```
+
+Run the built-in smoke test:
+
+```bash
+python evaluation.py
+```
+
+> **Production tip:** the commented-out block at the bottom of `evaluation.py` shows how to swap in [DeepEval](https://github.com/confident-ai/deepeval) (`FaithfulnessMetric`, `AnswerRelevancyMetric`) for a production-grade harness.
 
 ## Models Used
 
@@ -111,5 +164,6 @@ RAG/
 ├── dense_retriever.py      # Cosine similarity retrieval
 ├── bm25.py                 # BM25 sparse retrieval
 ├── cross_encoder_rerank.py # Cross-encoder reranker
+├── evaluation.py           # Retrieval + generation evaluation metrics
 └── test.ipynb              # Exploratory notebook
 ```
